@@ -651,7 +651,7 @@ static int synthvid_connect_vsp(struct hv_device *hdev)
 	/* Negotiate the protocol version with host */
 	switch (vmbus_proto_version) {
 	case VERSION_WIN10:
-	case VERSION_WIN10_V5:
+/*	case VERSION_WIN10_V5: */
 		ret = synthvid_negotiate_ver(hdev, SYNTHVID_VERSION_WIN10);
 		if (!ret)
 			break;
