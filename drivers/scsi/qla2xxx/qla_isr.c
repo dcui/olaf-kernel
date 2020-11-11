@@ -1633,6 +1633,7 @@ qla24xx_mbx_iocb_entry(scsi_qla_host_t *vha, struct req_que *req,
     struct mbx_24xx_entry *pkt)
 {
 	const char func[] = "MBX-IOCB2";
+	struct qla_hw_data *ha = vha->hw;
 	srb_t *sp;
 	struct srb_iocb *si;
 	u16 sz, i;
@@ -1641,6 +1642,18 @@ qla24xx_mbx_iocb_entry(scsi_qla_host_t *vha, struct req_que *req,
 	sp = qla2x00_get_sp_from_handle(vha, func, req, pkt);
 	if (!sp)
 		return;
+
+	if (sp->type == SRB_SCSI_CMD ||
+	    sp->type == SRB_NVME_CMD ||
+	    sp->type == SRB_TM_CMD) {
+		ql_log(ql_log_warn, vha, 0x509d,
+			"Inconsistent event entry type %d\n", sp->type);
+		if (IS_P3P_TYPE(ha))
+			set_bit(FCOE_CTX_RESET_NEEDED, &vha->dpc_flags);
+		else
+			set_bit(ISP_ABORT_NEEDED, &vha->dpc_flags);
+		return;
+	}
 
 	si = &sp->u.iocb_cmd;
 	sz = min(ARRAY_SIZE(pkt->mb), ARRAY_SIZE(sp->u.iocb_cmd.u.mbx.in_mb));
