@@ -13,7 +13,7 @@
 struct __packed qla27xx_fwdt_template {
 	__le32 template_type;
 	__le32 entry_offset;
-	uint32_t template_size;
+	__le32 template_size;
 	uint32_t count;		/* borrow field for running/residual count */
 
 	__le32 entry_count;
@@ -27,7 +27,7 @@ struct __packed qla27xx_fwdt_template {
 	uint32_t saved_state[16];
 
 	uint32_t reserved_3[8];
-	uint32_t firmware_version[5];
+	__le32 firmware_version[5];
 };
 
 #define TEMPLATE_TYPE_FWDUMP		99
