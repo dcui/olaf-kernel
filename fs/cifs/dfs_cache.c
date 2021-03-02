@@ -233,7 +233,7 @@ static inline void dump_tgts(const struct cache_entry *ce)
 static inline void dump_ce(const struct cache_entry *ce)
 {
 	cifs_dbg(FYI, "cache entry: path=%s,type=%s,ttl=%d,etime=%ld,hdr_flags=0x%x,ref_flags=0x%x,interlink=%s,path_consumed=%d,expired=%s\n",
-		 "interlink=%s,path_consumed=%d,expired=%s\n", ce->path,
+		 ce->path,
 		 ce->srvtype == DFS_TYPE_ROOT ? "root" : "link", ce->ttl,
 		 ce->etime.tv_nsec,
 		 ce->hdr_flags, ce->ref_flags,
