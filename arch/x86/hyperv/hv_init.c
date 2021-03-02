@@ -21,6 +21,9 @@
 #include <asm/hypervisor.h>
 #include <asm/hyperv.h>
 #include <asm/mshyperv.h>
+#ifndef __GENKSYMS__ /* kABI workaround for SLE kernel */
+#include <linux/kexec.h>
+#endif
 #include <linux/version.h>
 #include <linux/vmalloc.h>
 #include <linux/mm.h>
@@ -78,6 +81,8 @@ static struct clocksource hyperv_cs_msr = {
 	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
 };
 
+int hyperv_init_cpuhp;
+
 void *hv_hypercall_pg;
 EXPORT_SYMBOL_GPL(hv_hypercall_pg);
 struct clocksource *hyperv_cs;
@@ -113,6 +118,7 @@ void hyperv_init(void)
 {
 	u64 guest_id, required_msrs;
 	union hv_x64_msr_hypercall_contents hypercall_msr;
+	int cpuhp;
 	__u8 d1 = 0x10; /* SuSE */
 	__u16 d2 = 0x0; /* -d of a.b.c-d */
 
@@ -132,8 +138,9 @@ void hyperv_init(void)
 	if (!hv_vp_index)
 		return;
 
-	if (cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "x86/hyperv_init:online",
-			      hv_cpu_init, NULL) < 0)
+	cpuhp = cpuhp_setup_state(CPUHP_AP_ONLINE_DYN, "x86/hyperv_init:online",
+				  hv_cpu_init, NULL);
+	if (cpuhp < 0)
 		goto free_vp_index;
 
 	/*
@@ -193,6 +200,7 @@ register_msr_cs:
 	if (ms_hyperv.features & HV_X64_MSR_TIME_REF_COUNT_AVAILABLE)
 		clocksource_register_hz(&hyperv_cs_msr, NSEC_PER_SEC/100);
 
+	hyperv_init_cpuhp = cpuhp;
 	return;
 
 free_vp_index:

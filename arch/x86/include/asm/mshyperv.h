@@ -176,6 +176,8 @@ void hv_remove_crash_handler(void);
 
 #if IS_ENABLED(CONFIG_HYPERV)
 extern struct clocksource *hyperv_cs;
+extern int hyperv_init_cpuhp;
+
 extern void *hv_hypercall_pg;
 
 static inline u64 hv_do_hypercall(u64 control, void *input, void *output)
