@@ -490,6 +490,9 @@ static int reset_rx_pools(struct ibmvnic_adapter *adapter)
 	int i, j, rc;
 	u64 *size_array;
 
+	if (!adapter->rx_pool)
+		return -1;
+
 	size_array = (u64 *)((u8 *)(adapter->login_rsp_buf) +
 		be32_to_cpu(adapter->login_rsp_buf->off_rxadd_buff_size));
 
@@ -659,6 +662,9 @@ static int reset_tx_pools(struct ibmvnic_adapter *adapter)
 {
 	int tx_scrqs;
 	int i, rc;
+
+	if (!adapter->tx_pool)
+		return -1;
 
 	tx_scrqs = be32_to_cpu(adapter->login_rsp_buf->num_txsubm_subcrqs);
 	for (i = 0; i < tx_scrqs; i++) {
@@ -1191,29 +1197,53 @@ static int ibmvnic_open(struct net_device *netdev)
 	struct ibmvnic_adapter *adapter = netdev_priv(netdev);
 	int rc;
 
-	/* If device failover is pending, just set device state and return.
-	 * Device operation will be handled by reset routine.
+	ASSERT_RTNL();
+
+	/* If device failover is pending or we are about to reset, just set
+	 * device state and return. Device operation will be handled by reset
+	 * routine.
+	 *
+	 * It should be safe to overwrite the adapter->state here. Since
+	 * we hold the rtnl, either the reset has not actually started or
+	 * the rtnl got dropped during the set_link_state() in do_reset().
+	 * In the former case, no one else is changing the state (again we
+	 * have the rtnl) and in the latter case, do_reset() will detect and
+	 * honor our setting below.
 	 */
-	if (adapter->failover_pending) {
+	if (adapter->failover_pending || (test_bit(0, &adapter->resetting))) {
+		netdev_dbg(netdev, "[S:%d FOP:%d] Resetting, deferring open\n",
+			   adapter->state, adapter->failover_pending);
 		adapter->state = VNIC_OPEN;
-		return 0;
+		rc = 0;
+		goto out;
 	}
 
 	if (adapter->state != VNIC_CLOSED) {
 		rc = ibmvnic_login(netdev);
 		if (rc)
-			return rc;
+			goto out;
 
 		rc = init_resources(adapter);
 		if (rc) {
 			netdev_err(netdev, "failed to initialize resources\n");
 			release_resources(adapter);
-			return rc;
+			goto out;
 		}
 	}
 
 	rc = __ibmvnic_open(netdev);
 
+out:
+	/*
+	 * If open failed and there is a pending failover or in-progress reset,
+	 * set device state and return. Device operation will be handled by
+	 * reset routine. See also comments above regarding rtnl.
+	 */
+	if (rc &&
+	    (adapter->failover_pending || (test_bit(0, &adapter->resetting)))) {
+		adapter->state = VNIC_OPEN;
+		rc = 0;
+	}
 	return rc;
 }
 
@@ -1862,7 +1892,7 @@ static int do_change_param_reset(struct ibmvnic_adapter *adapter,
 	if (reset_state == VNIC_OPEN) {
 		rc = __ibmvnic_close(netdev);
 		if (rc)
-			return rc;
+			goto out;
 	}
 
 	release_resources(adapter);
@@ -1880,24 +1910,25 @@ static int do_change_param_reset(struct ibmvnic_adapter *adapter,
 	}
 
 	rc = ibmvnic_reset_init(adapter);
-	if (rc)
-		return IBMVNIC_INIT_FAILED;
+	if (rc) {
+		rc = IBMVNIC_INIT_FAILED;
+		goto out;
+	}
 
 	/* If the adapter was in PROBE state prior to the reset,
 	 * exit here.
 	 */
 	if (reset_state == VNIC_PROBED)
-		return 0;
+		goto out;
 
 	rc = ibmvnic_login(netdev);
 	if (rc) {
-		adapter->state = reset_state;
-		return rc;
+		goto out;
 	}
 
 	rc = init_resources(adapter);
 	if (rc)
-		return rc;
+		goto out;
 
 	ibmvnic_disable_irqs(adapter);
 
@@ -1907,8 +1938,10 @@ static int do_change_param_reset(struct ibmvnic_adapter *adapter,
 		return 0;
 
 	rc = __ibmvnic_open(netdev);
-	if (rc)
-		return IBMVNIC_OPEN_FAILED;
+	if (rc) {
+		rc = IBMVNIC_OPEN_FAILED;
+		goto out;
+	}
 
 	/* refresh device's multicast list */
 	ibmvnic_set_multi(netdev);
@@ -1917,7 +1950,10 @@ static int do_change_param_reset(struct ibmvnic_adapter *adapter,
 	for (i = 0; i < adapter->req_rx_queues; i++)
 		napi_schedule(&adapter->napi[i]);
 
-	return 0;
+out:
+	if (rc)
+		adapter->state = reset_state;
+	return rc;
 }
 
 /**
@@ -1936,6 +1972,21 @@ static int do_reset(struct ibmvnic_adapter *adapter,
 		   rwi->reset_reason);
 
 	rtnl_lock();
+	/*
+	 * Now that we have the rtnl lock, clear any pending failover.
+	 * This will ensure ibmvnic_open() has either completed or will
+	 * block until failover is complete.
+	 */
+	if (rwi->reset_reason == VNIC_RESET_FAILOVER)
+		adapter->failover_pending = false;
+
+	/* read the state and check (again) after getting rtnl */
+	reset_state = adapter->state;
+
+	if (reset_state == VNIC_REMOVING || reset_state == VNIC_REMOVED) {
+		rc = -EBUSY;
+		goto out;
+	}
 
 	netif_carrier_off(netdev);
 	adapter->reset_reason = rwi->reset_reason;
@@ -1963,7 +2014,24 @@ static int do_reset(struct ibmvnic_adapter *adapter,
 		if (rc)
 			goto out;
 
+		if (adapter->state == VNIC_OPEN) {
+			/* When we dropped rtnl, ibmvnic_open() got
+			 * it and noticed that we are resetting and
+			 * set the adapter state to OPEN. Update our
+			 * new "target" state, and resume the reset
+			 * from VNIC_CLOSING state.
+			 */
+			netdev_dbg(netdev,
+				   "Open changed state from %d, updating.\n",
+				   reset_state);
+			reset_state = VNIC_OPEN;
+			adapter->state = VNIC_CLOSING;
+		}
+
 		if (adapter->state != VNIC_CLOSING) {
+			/* If someone else changed the adapter state
+			 * when we dropped the rtnl, fail the reset
+			 */
 			rc = -1;
 			goto out;
 		}
@@ -2013,7 +2081,6 @@ static int do_reset(struct ibmvnic_adapter *adapter,
 
 		rc = ibmvnic_login(netdev);
 		if (rc) {
-			adapter->state = reset_state;
 			goto out;
 		}
 
@@ -2022,7 +2089,10 @@ static int do_reset(struct ibmvnic_adapter *adapter,
 		    adapter->req_rx_add_entries_per_subcrq !=
 		    old_num_rx_slots ||
 		    adapter->req_tx_entries_per_subcrq !=
-		    old_num_tx_slots) {
+		    old_num_tx_slots ||
+		    !adapter->rx_pool ||
+		    !adapter->tso_pool ||
+		    !adapter->tx_pool) {
 			release_rx_pools(adapter);
 			release_tx_pools(adapter);
 			release_napi(adapter);
@@ -2034,12 +2104,18 @@ static int do_reset(struct ibmvnic_adapter *adapter,
 
 		} else {
 			rc = reset_tx_pools(adapter);
-			if (rc)
+			if (rc) {
+				netdev_dbg(adapter->netdev, "reset tx pools failed (%d)\n",
+						rc);
 				goto out;
+			}
 
 			rc = reset_rx_pools(adapter);
-			if (rc)
+			if (rc) {
+				netdev_dbg(adapter->netdev, "reset rx pools failed (%d)\n",
+						rc);
 				goto out;
+			}
 		}
 		ibmvnic_disable_irqs(adapter);
 	}
@@ -2069,6 +2145,9 @@ static int do_reset(struct ibmvnic_adapter *adapter,
 	rc = 0;
 
 out:
+	/* restore the adapter state if reset failed */
+	if (rc)
+		adapter->state = reset_state;
 	rtnl_unlock();
 
 	return rc;
@@ -2082,6 +2161,14 @@ static int do_hard_reset(struct ibmvnic_adapter *adapter,
 
 	netdev_dbg(adapter->netdev, "Hard resetting driver (%d)\n",
 		   rwi->reset_reason);
+
+	/* read the state and check (again) after getting rtnl */
+	reset_state = adapter->state;
+
+	if (reset_state == VNIC_REMOVING || reset_state == VNIC_REMOVED) {
+		rc = -EBUSY;
+		goto out;
+	}
 
 	netif_carrier_off(netdev);
 	adapter->reset_reason = rwi->reset_reason;
@@ -2101,40 +2188,43 @@ static int do_hard_reset(struct ibmvnic_adapter *adapter,
 	if (rc) {
 		netdev_err(adapter->netdev,
 			   "Couldn't initialize crq. rc=%d\n", rc);
-		return rc;
+		goto out;
 	}
 
 	rc = ibmvnic_init(adapter);
 	if (rc)
-		return rc;
+		goto out;
 
 	/* If the adapter was in PROBE state prior to the reset,
 	 * exit here.
 	 */
 	if (reset_state == VNIC_PROBED)
-		return 0;
+		goto out;
 
 	rc = ibmvnic_login(netdev);
-	if (rc) {
-		adapter->state = VNIC_PROBED;
-		return 0;
-	}
+	if (rc)
+		goto out;
 
 	rc = init_resources(adapter);
 	if (rc)
-		return rc;
+		goto out;
 
 	ibmvnic_disable_irqs(adapter);
 	adapter->state = VNIC_CLOSED;
 
 	if (reset_state == VNIC_CLOSED)
-		return 0;
+		goto out;
 
 	rc = __ibmvnic_open(netdev);
+	if (rc) {
+		rc = IBMVNIC_OPEN_FAILED;
+		goto out;
+	}
+out:
+	/* restore adapter state if reset failed */
 	if (rc)
-		return IBMVNIC_OPEN_FAILED;
-
-	return 0;
+		adapter->state = reset_state;
+	return rc;
 }
 
 static struct ibmvnic_rwi *get_next_rwi(struct ibmvnic_adapter *adapter)
@@ -2198,7 +2288,6 @@ static void __ibmvnic_reset(struct work_struct *work)
 
 		if (!saved_state) {
 			reset_state = adapter->state;
-			adapter->state = VNIC_RESETTING;
 			saved_state = true;
 		}
 		spin_unlock_irqrestore(&adapter->state_lock, flags);
@@ -2207,6 +2296,13 @@ static void __ibmvnic_reset(struct work_struct *work)
 			/* CHANGE_PARAM requestor holds rtnl_lock */
 			rc = do_change_param_reset(adapter, rwi, reset_state);
 		} else if (adapter->force_reset_recovery) {
+			/*
+			 * Since we are doing a hard reset now, clear the
+			 * failover_pending flag so we don't ignore any
+			 * future MOBILITY or other resets.
+			 */
+			adapter->failover_pending = false;
+
 			/* Transport event occurred during previous reset */
 			if (adapter->wait_for_reset) {
 				/* Previous was CHANGE_PARAM; caller locked */
@@ -2218,18 +2314,19 @@ static void __ibmvnic_reset(struct work_struct *work)
 				rc = do_hard_reset(adapter, rwi, reset_state);
 				rtnl_unlock();
 			}
-		} else if (!(rwi->reset_reason == VNIC_RESET_FATAL &&
-				adapter->from_passive_init)) {
+			if (rc) {
+				/* give backing device time to settle down */
+				netdev_dbg(adapter->netdev,
+					   "[S:%d] Hard reset failed, waiting 60 secs\n",
+					   adapter->state);
+				set_current_state(TASK_UNINTERRUPTIBLE);
+				schedule_timeout(60 * HZ);
+			}
+		} else {
 			rc = do_reset(adapter, rwi, reset_state);
 		}
 		kfree(rwi);
-		if (rc == IBMVNIC_OPEN_FAILED) {
-			if (list_empty(&adapter->rwi_list))
-				adapter->state = VNIC_CLOSED;
-			else
-				adapter->state = reset_state;
-			rc = 0;
-		} else if (rc && rc != IBMVNIC_INIT_FAILED &&
+		if (rc && rc != IBMVNIC_INIT_FAILED && rc != IBMVNIC_OPEN_FAILED &&
 		    !adapter->force_reset_recovery)
 			break;
 
@@ -2271,9 +2368,15 @@ static int ibmvnic_reset(struct ibmvnic_adapter *adapter,
 	unsigned long flags;
 	int ret;
 
+	/*
+	 * If failover is pending don't schedule any other reset.
+	 * Instead let the failover complete. If there is already a
+	 * a failover reset scheduled, we will detect and drop the
+	 * duplicate reset when walking the ->rwi_list below.
+	 */
 	if (adapter->state == VNIC_REMOVING ||
 	    adapter->state == VNIC_REMOVED ||
-	    adapter->failover_pending) {
+	    (adapter->failover_pending && reason != VNIC_RESET_FAILOVER)) {
 		ret = EBUSY;
 		netdev_dbg(netdev, "Adapter removing or pending failover, skipping reset\n");
 		goto err;
@@ -2825,15 +2928,24 @@ static int reset_one_sub_crq_queue(struct ibmvnic_adapter *adapter,
 {
 	int rc;
 
+	if (!scrq) {
+		netdev_dbg(adapter->netdev, "Invalid scrq reset.\n");
+		return -EINVAL;
+	}
+
 	if (scrq->irq) {
 		free_irq(scrq->irq, scrq);
 		irq_dispose_mapping(scrq->irq);
 		scrq->irq = 0;
 	}
-
-	memset(scrq->msgs, 0, 4 * PAGE_SIZE);
-	atomic_set(&scrq->used, 0);
-	scrq->cur = 0;
+	if (scrq->msgs) {
+		memset(scrq->msgs, 0, 4 * PAGE_SIZE);
+		atomic_set(&scrq->used, 0);
+		scrq->cur = 0;
+	} else {
+		netdev_dbg(adapter->netdev, "Invalid scrq reset\n");
+		return -EINVAL;
+	}
 
 	rc = h_reg_sub_crq(adapter->vdev->unit_address, scrq->msg_token,
 			   4 * PAGE_SIZE, &scrq->crq_num, &scrq->hw_irq);
@@ -2843,6 +2955,9 @@ static int reset_one_sub_crq_queue(struct ibmvnic_adapter *adapter,
 static int reset_sub_crq_queues(struct ibmvnic_adapter *adapter)
 {
 	int i, rc;
+
+	if (!adapter->tx_scrq || !adapter->rx_scrq)
+		return -EINVAL;
 
 	for (i = 0; i < adapter->req_tx_queues; i++) {
 		netdev_dbg(adapter->netdev, "Re-setting tx_scrq[%d]\n", i);
@@ -4649,7 +4764,6 @@ static void ibmvnic_handle_crq(union ibmvnic_crq *crq,
 		case IBMVNIC_CRQ_INIT:
 			dev_info(dev, "Partner initialized\n");
 			adapter->from_passive_init = true;
-			adapter->failover_pending = false;
 			if (!completion_done(&adapter->init_done)) {
 				complete(&adapter->init_done);
 				adapter->init_done_rc = -EIO;
@@ -5205,7 +5319,7 @@ static int ibmvnic_remove(struct vio_dev *dev)
 	unsigned long flags;
 
 	spin_lock_irqsave(&adapter->state_lock, flags);
-	if (adapter->state == VNIC_RESETTING) {
+	if (test_bit(0, &adapter->resetting)) {
 		spin_unlock_irqrestore(&adapter->state_lock, flags);
 		return -EBUSY;
 	}
