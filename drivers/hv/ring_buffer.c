@@ -242,6 +242,10 @@ int hv_ringbuffer_init(struct hv_ring_buffer_info *ring_info,
 /* Cleanup the ring buffer. */
 void hv_ringbuffer_cleanup(struct hv_ring_buffer_info *ring_info)
 {
+	void *ring_buffer = ring_info->ring_buffer;
+	ring_info->ring_buffer = NULL;
+	vunmap(ring_buffer);
+	return;
 	vunmap(ring_info->ring_buffer);
 }
 
