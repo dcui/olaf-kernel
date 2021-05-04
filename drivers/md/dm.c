@@ -1503,7 +1503,7 @@ static void __split_and_process_bio(struct mapped_device *md,
 				    struct dm_table *map, struct bio *bio)
 {
 	struct clone_info ci;
-	int error = 0;
+	int error = 0, cpu;
 
 	if (unlikely(!map)) {
 		bio_io_error(bio);
@@ -1553,6 +1553,19 @@ static void __split_and_process_bio(struct mapped_device *md,
 				struct bio *b = bio_split(bio, bio_sectors(bio) - ci.sector_count,
 							  GFP_NOIO, md->queue->bio_split);
 				ci.io->orig_bio = b;
+
+				/*
+				 * Adjust IO stats for each split, otherwise upon queue
+				 * reentry there will be redundant IO accounting.
+				 * NOTE: this is a stop-gap fix, a proper fix involves
+				 * significant refactoring of DM core's bio splitting
+				 * (by eliminating DM's splitting and just using bio_split)
+				 */
+				cpu = part_stat_lock();
+				__part_stat_add(cpu, &dm_disk(md)->part0, sectors[bio_data_dir(bio)],
+							-(unsigned long)ci.sector_count);
+				part_stat_unlock();
+
 				bio_chain(b, bio);
 				generic_make_request(bio);
 				break;
