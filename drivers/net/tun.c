@@ -1351,7 +1351,7 @@ drop:
 	}
 
 	skb_reset_network_header(skb);
-	skb_probe_transport_header(skb, 0);
+	skb_probe_transport_header(skb);
 
 	rxhash = skb_get_hash(skb);
 
