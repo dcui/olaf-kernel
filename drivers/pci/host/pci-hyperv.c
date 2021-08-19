@@ -919,6 +919,7 @@ static void hv_irq_unmask(struct irq_data *data)
 	struct retarget_msi_interrupt *params;
 	struct hv_pcibus_device *hbus;
 	struct cpumask *dest;
+	cpumask_var_t tmp;
 	struct pci_bus *pbus;
 	struct pci_dev *pdev;
 	unsigned long flags;
@@ -966,13 +967,19 @@ static void hv_irq_unmask(struct irq_data *data)
 		params->int_target.flags |=
 			HV_DEVICE_INTERRUPT_TARGET_PROCESSOR_SET;
 
-		for_each_cpu_and(cpu, dest, cpu_online_mask) {
+		if (!alloc_cpumask_var(&tmp, GFP_ATOMIC)) {
+			res = 1;
+			goto exit_unlock;
+		}
+		cpumask_and(tmp, dest, irq_data_get_affinity_mask(data));
+		for_each_cpu_and(cpu, tmp, cpu_online_mask) {
 			cpu_vmbus = hv_cpu_number_to_vp_number(cpu);
 
 			if (cpu_vmbus >= HV_VP_SET_BANK_COUNT_MAX * 64) {
 				dev_err(&hbus->hdev->device,
 					"too high CPU %d", cpu_vmbus);
 				res = 1;
+				free_cpumask_var(tmp);
 				goto exit_unlock;
 			}
 
@@ -982,6 +989,7 @@ static void hv_irq_unmask(struct irq_data *data)
 			params->int_target.vp_set.banks[index] |=
 				(1ULL << (cpu_vmbus & 63));
 		}
+		free_cpumask_var(tmp);
 		/*
 		 * var-sized hypercall, var-size starts after vp_mask (thus
 		 * vp_set.format does not count, but vp_set.valid_banks does).
