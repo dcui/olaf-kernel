@@ -136,13 +136,13 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define _EMIT2(op)						\
 ({								\
 	if (jit->prg_buf)					\
-		*(u16 *) (jit->prg_buf + jit->prg) = op;	\
+		*(u16 *) (jit->prg_buf + jit->prg) = (op);	\
 	jit->prg += 2;						\
 })
 
 #define EMIT2(op, b1, b2)					\
 ({								\
-	_EMIT2(op | reg(b1, b2));				\
+	_EMIT2((op) | reg(b1, b2));				\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
 })
@@ -150,20 +150,20 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define _EMIT4(op)						\
 ({								\
 	if (jit->prg_buf)					\
-		*(u32 *) (jit->prg_buf + jit->prg) = op;	\
+		*(u32 *) (jit->prg_buf + jit->prg) = (op);	\
 	jit->prg += 4;						\
 })
 
 #define EMIT4(op, b1, b2)					\
 ({								\
-	_EMIT4(op | reg(b1, b2));				\
+	_EMIT4((op) | reg(b1, b2));				\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
 })
 
 #define EMIT4_RRF(op, b1, b2, b3)				\
 ({								\
-	_EMIT4(op | reg_high(b3) << 8 | reg(b1, b2));		\
+	_EMIT4((op) | reg_high(b3) << 8 | reg(b1, b2));		\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
 	REG_SET_SEEN(b3);					\
@@ -172,13 +172,13 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define _EMIT4_DISP(op, disp)					\
 ({								\
 	unsigned int __disp = (disp) & 0xfff;			\
-	_EMIT4(op | __disp);					\
+	_EMIT4((op) | __disp);					\
 })
 
 #define EMIT4_DISP(op, b1, b2, disp)				\
 ({								\
-	_EMIT4_DISP(op | reg_high(b1) << 16 |			\
-		    reg_high(b2) << 8, disp);			\
+	_EMIT4_DISP((op) | reg_high(b1) << 16 |			\
+		    reg_high(b2) << 8, (disp));			\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
 })
@@ -186,21 +186,21 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define EMIT4_IMM(op, b1, imm)					\
 ({								\
 	unsigned int __imm = (imm) & 0xffff;			\
-	_EMIT4(op | reg_high(b1) << 16 | __imm);		\
+	_EMIT4((op) | reg_high(b1) << 16 | __imm);		\
 	REG_SET_SEEN(b1);					\
 })
 
 #define EMIT4_PCREL(op, pcrel)					\
 ({								\
 	long __pcrel = ((pcrel) >> 1) & 0xffff;			\
-	_EMIT4(op | __pcrel);					\
+	_EMIT4((op) | __pcrel);					\
 })
 
 #define _EMIT6(op1, op2)					\
 ({								\
 	if (jit->prg_buf) {					\
-		*(u32 *) (jit->prg_buf + jit->prg) = op1;	\
-		*(u16 *) (jit->prg_buf + jit->prg + 4) = op2;	\
+		*(u32 *) (jit->prg_buf + jit->prg) = (op1);	\
+		*(u16 *) (jit->prg_buf + jit->prg + 4) = (op2);	\
 	}							\
 	jit->prg += 6;						\
 })
@@ -208,20 +208,20 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define _EMIT6_DISP(op1, op2, disp)				\
 ({								\
 	unsigned int __disp = (disp) & 0xfff;			\
-	_EMIT6(op1 | __disp, op2);				\
+	_EMIT6((op1) | __disp, op2);				\
 })
 
 #define _EMIT6_DISP_LH(op1, op2, disp)				\
 ({								\
-	u32 _disp = (u32) disp;					\
+	u32 _disp = (u32) (disp);				\
 	unsigned int __disp_h = _disp & 0xff000;		\
 	unsigned int __disp_l = _disp & 0x00fff;		\
-	_EMIT6(op1 | __disp_l, op2 | __disp_h >> 4);		\
+	_EMIT6((op1) | __disp_l, (op2) | __disp_h >> 4);	\
 })
 
 #define EMIT6_DISP_LH(op1, op2, b1, b2, b3, disp)		\
 ({								\
-	_EMIT6_DISP_LH(op1 | reg(b1, b2) << 16 |		\
+	_EMIT6_DISP_LH((op1) | reg(b1, b2) << 16 |		\
 		       reg_high(b3) << 8, op2, disp);		\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
@@ -231,8 +231,8 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define EMIT6_PCREL_LABEL(op1, op2, b1, b2, label, mask)	\
 ({								\
 	int rel = (jit->labels[label] - jit->prg) >> 1;		\
-	_EMIT6(op1 | reg(b1, b2) << 16 | (rel & 0xffff),	\
-	       op2 | mask << 12);				\
+	_EMIT6((op1) | reg(b1, b2) << 16 | (rel & 0xffff),	\
+	       (op2) | (mask) << 12);				\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
 })
@@ -240,43 +240,42 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 #define EMIT6_PCREL_IMM_LABEL(op1, op2, b1, imm, label, mask)	\
 ({								\
 	int rel = (jit->labels[label] - jit->prg) >> 1;		\
-	_EMIT6(op1 | (reg_high(b1) | mask) << 16 |		\
-		(rel & 0xffff), op2 | (imm & 0xff) << 8);	\
+	_EMIT6((op1) | (reg_high(b1) | (mask)) << 16 |		\
+		(rel & 0xffff), (op2) | ((imm) & 0xff) << 8);	\
 	REG_SET_SEEN(b1);					\
-	BUILD_BUG_ON(((unsigned long) imm) > 0xff);		\
+	BUILD_BUG_ON(((unsigned long) (imm)) > 0xff);		\
 })
 
 #define EMIT6_PCREL(op1, op2, b1, b2, i, off, mask)		\
 ({								\
-	/* Branch instruction needs 6 bytes */			\
-	int rel = (addrs[i + off + 1] - (addrs[i + 1] - 6)) / 2;\
-	_EMIT6(op1 | reg(b1, b2) << 16 | (rel & 0xffff), op2 | mask);	\
+	int rel = (addrs[(i) + (off) + 1] - jit->prg) / 2;	\
+	_EMIT6((op1) | reg(b1, b2) << 16 | (rel & 0xffff), (op2) | (mask));\
 	REG_SET_SEEN(b1);					\
 	REG_SET_SEEN(b2);					\
 })
 
 #define EMIT6_PCREL_RILB(op, b, target)				\
 ({								\
-	int rel = (target - jit->prg) / 2;			\
-	_EMIT6(op | reg_high(b) << 16 | rel >> 16, rel & 0xffff);	\
+	int rel = ((target) - jit->prg) / 2;			\
+	_EMIT6((op) | reg_high(b) << 16 | rel >> 16, rel & 0xffff);\
 	REG_SET_SEEN(b);					\
 })
 
 #define EMIT6_PCREL_RIL(op, target)				\
 ({								\
-	int rel = (target - jit->prg) / 2;			\
-	_EMIT6(op | rel >> 16, rel & 0xffff);			\
+	int rel = ((target) - jit->prg) / 2;			\
+	_EMIT6((op) | rel >> 16, rel & 0xffff);			\
 })
 
 #define _EMIT6_IMM(op, imm)					\
 ({								\
 	unsigned int __imm = (imm);				\
-	_EMIT6(op | (__imm >> 16), __imm & 0xffff);		\
+	_EMIT6((op) | (__imm >> 16), __imm & 0xffff);		\
 })
 
 #define EMIT6_IMM(op, b1, imm)					\
 ({								\
-	_EMIT6_IMM(op | reg_high(b1) << 16, imm);		\
+	_EMIT6_IMM((op) | reg_high(b1) << 16, imm);		\
 	REG_SET_SEEN(b1);					\
 })
 
@@ -286,7 +285,7 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 	ret = jit->lit - jit->base_ip;				\
 	jit->seen |= SEEN_LITERAL;				\
 	if (jit->prg_buf)					\
-		*(u32 *) (jit->prg_buf + jit->lit) = (u32) val;	\
+		*(u32 *) (jit->prg_buf + jit->lit) = (u32) (val);\
 	jit->lit += 4;						\
 	ret;							\
 })
@@ -297,7 +296,7 @@ static inline void reg_set_seen(struct bpf_jit *jit, u32 b1)
 	ret = jit->lit - jit->base_ip;				\
 	jit->seen |= SEEN_LITERAL;				\
 	if (jit->prg_buf)					\
-		*(u64 *) (jit->prg_buf + jit->lit) = (u64) val;	\
+		*(u64 *) (jit->prg_buf + jit->lit) = (u64) (val);\
 	jit->lit += 8;						\
 	ret;							\
 })
@@ -594,10 +593,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 		EMIT4(0xb9080000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_ADD | BPF_K: /* dst = (u32) dst + (u32) imm */
-		if (!imm)
-			break;
-		/* alfi %dst,imm */
-		EMIT6_IMM(0xc20b0000, dst_reg, imm);
+		if (imm != 0) {
+			/* alfi %dst,imm */
+			EMIT6_IMM(0xc20b0000, dst_reg, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_ADD | BPF_K: /* dst = dst + imm */
@@ -619,17 +618,22 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 		EMIT4(0xb9090000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_SUB | BPF_K: /* dst = (u32) dst - (u32) imm */
-		if (!imm)
-			break;
-		/* alfi %dst,-imm */
-		EMIT6_IMM(0xc20b0000, dst_reg, -imm);
+		if (imm != 0) {
+			/* alfi %dst,-imm */
+			EMIT6_IMM(0xc20b0000, dst_reg, -imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_SUB | BPF_K: /* dst = dst - imm */
 		if (!imm)
 			break;
-		/* agfi %dst,-imm */
-		EMIT6_IMM(0xc2080000, dst_reg, -imm);
+		if (imm == -0x80000000) {
+			/* algfi %dst,0x80000000 */
+			EMIT6_IMM(0xc20a0000, dst_reg, 0x80000000);
+		} else {
+			/* agfi %dst,-imm */
+			EMIT6_IMM(0xc2080000, dst_reg, -imm);
+		}
 		break;
 	/*
 	 * BPF_MUL
@@ -644,10 +648,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 		EMIT4(0xb90c0000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_MUL | BPF_K: /* dst = (u32) dst * (u32) imm */
-		if (imm == 1)
-			break;
-		/* msfi %r5,imm */
-		EMIT6_IMM(0xc2010000, dst_reg, imm);
+		if (imm != 1) {
+			/* msfi %r5,imm */
+			EMIT6_IMM(0xc2010000, dst_reg, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_MUL | BPF_K: /* dst = dst * imm */
@@ -708,6 +712,8 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 			if (BPF_OP(insn->code) == BPF_MOD)
 				/* lhgi %dst,0 */
 				EMIT4_IMM(0xa7090000, dst_reg, 0);
+			else
+				EMIT_ZERO(dst_reg);
 			break;
 		}
 		/* lhi %w0,0 */
@@ -800,10 +806,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 		EMIT4(0xb9820000, dst_reg, src_reg);
 		break;
 	case BPF_ALU | BPF_XOR | BPF_K: /* dst = (u32) dst ^ (u32) imm */
-		if (!imm)
-			break;
-		/* xilf %dst,imm */
-		EMIT6_IMM(0xc0070000, dst_reg, imm);
+		if (imm != 0) {
+			/* xilf %dst,imm */
+			EMIT6_IMM(0xc0070000, dst_reg, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_XOR | BPF_K: /* dst = dst ^ imm */
@@ -824,10 +830,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 		EMIT6_DISP_LH(0xeb000000, 0x000d, dst_reg, dst_reg, src_reg, 0);
 		break;
 	case BPF_ALU | BPF_LSH | BPF_K: /* dst = (u32) dst << (u32) imm */
-		if (imm == 0)
-			break;
-		/* sll %dst,imm(%r0) */
-		EMIT4_DISP(0x89000000, dst_reg, REG_0, imm);
+		if (imm != 0) {
+			/* sll %dst,imm(%r0) */
+			EMIT4_DISP(0x89000000, dst_reg, REG_0, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_LSH | BPF_K: /* dst = dst << imm */
@@ -849,10 +855,10 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 		EMIT6_DISP_LH(0xeb000000, 0x000c, dst_reg, dst_reg, src_reg, 0);
 		break;
 	case BPF_ALU | BPF_RSH | BPF_K: /* dst = (u32) dst >> (u32) imm */
-		if (imm == 0)
-			break;
-		/* srl %dst,imm(%r0) */
-		EMIT4_DISP(0x88000000, dst_reg, REG_0, imm);
+		if (imm != 0) {
+			/* srl %dst,imm(%r0) */
+			EMIT4_DISP(0x88000000, dst_reg, REG_0, imm);
+		}
 		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_RSH | BPF_K: /* dst = dst >> imm */
@@ -864,9 +870,21 @@ static noinline int bpf_jit_insn(struct bpf_jit *jit, struct bpf_prog *fp,
 	/*
 	 * BPF_ARSH
 	 */
+	case BPF_ALU | BPF_ARSH | BPF_X: /* ((s32) dst) >>= src */
+		/* sra %dst,%dst,0(%src) */
+		EMIT4_DISP(0x8a000000, dst_reg, src_reg, 0);
+		EMIT_ZERO(dst_reg);
+		break;
 	case BPF_ALU64 | BPF_ARSH | BPF_X: /* ((s64) dst) >>= src */
 		/* srag %dst,%dst,0(%src) */
 		EMIT6_DISP_LH(0xeb000000, 0x000a, dst_reg, dst_reg, src_reg, 0);
+		break;
+	case BPF_ALU | BPF_ARSH | BPF_K: /* ((s32) dst >> imm */
+		if (imm != 0) {
+			/* sra %dst,imm(%r0) */
+			EMIT4_DISP(0x8a000000, dst_reg, REG_0, imm);
+		}
+		EMIT_ZERO(dst_reg);
 		break;
 	case BPF_ALU64 | BPF_ARSH | BPF_K: /* ((s64) dst) >>= imm */
 		if (imm == 0)
