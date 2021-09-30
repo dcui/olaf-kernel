@@ -6,6 +6,23 @@
 
 #include "mana.h"
 
+static unsigned long *mana_bitmap_alloc(unsigned int nbits, gfp_t flags)
+{
+	return kmalloc_array(BITS_TO_LONGS(nbits), sizeof(unsigned long),
+			     flags);
+}
+#define bitmap_alloc mana_bitmap_alloc
+static unsigned long *mana_bitmap_zalloc(unsigned int nbits, gfp_t flags)
+{
+	return mana_bitmap_alloc(nbits, flags | __GFP_ZERO);
+}
+#define bitmap_zalloc mana_bitmap_zalloc
+static void mana_bitmap_free(const unsigned long *bitmap)
+{
+	kfree(bitmap);
+}
+#define bitmap_free mana_bitmap_free
+
 static u32 mana_gd_r32(struct gdma_context *g, u64 offset)
 {
 	return readl(g->bar0_va + offset);
