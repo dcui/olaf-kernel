@@ -352,7 +352,7 @@ static int mana_get_tx_queue(struct net_device *ndev, struct sk_buff *skb,
 }
 
 static u16 mana_select_queue(struct net_device *ndev, struct sk_buff *skb,
-			     struct net_device *sb_dev)
+			     struct net_device *sb_dev, select_queue_fallback_t fallback)
 {
 	int txq;
 
