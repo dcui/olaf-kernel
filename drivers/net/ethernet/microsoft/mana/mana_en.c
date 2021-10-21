@@ -352,7 +352,7 @@ static int mana_get_tx_queue(struct net_device *ndev, struct sk_buff *skb,
 }
 
 static u16 mana_select_queue(struct net_device *ndev, struct sk_buff *skb,
-			     struct net_device *sb_dev, select_queue_fallback_t fallback)
+			     void *accel_priv, select_queue_fallback_t fallback)
 {
 	int txq;
 
@@ -1477,8 +1477,10 @@ static struct mana_rxq *mana_create_rxq(struct mana_port_context *apc,
 	if (err)
 		goto out;
 
-	if (cq->gdma_id >= gc->max_num_cqs)
+	if (WARN_ON(cq->gdma_id >= gc->max_num_cqs)) {
+		err = -EINVAL;
 		goto out;
+	}
 
 	gc->cq_table[cq->gdma_id] = cq->gdma_cq;
 
