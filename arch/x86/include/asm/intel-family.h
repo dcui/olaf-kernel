@@ -50,6 +50,9 @@
 #define INTEL_FAM6_SKYLAKE_X		0x55
 #define INTEL_FAM6_KABYLAKE_L		0x8E
 #define INTEL_FAM6_KABYLAKE		0x9E
+#define INTEL_FAM6_ICELAKE_X		0x6A
+#define INTEL_FAM6_ICELAKE_XEON_D	0x6C
+#define INTEL_FAM6_ICELAKE_DESKTOP	0x7D
 
 /* "Small Core" Processors (Atom) */
 
