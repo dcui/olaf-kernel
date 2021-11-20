@@ -31,6 +31,7 @@
 #include <drm/ttm/ttm_placement.h>
 #include "vmwgfx_so.h"
 #include "vmwgfx_binding.h"
+#include <linux/nospec.h>
 
 #define VMW_RES_HT_ORDER 12
 
@@ -4370,6 +4371,7 @@ int vmw_execbuf_ioctl(struct drm_device *dev, unsigned long data,
 	struct vmw_private *dev_priv = vmw_priv(dev);
 	struct drm_vmw_execbuf_arg arg;
 	int ret;
+	int index;
 	static const size_t copy_offset[] = {
 		offsetof(struct drm_vmw_execbuf_arg, context_handle),
 		sizeof(struct drm_vmw_execbuf_arg)};
@@ -4396,10 +4398,11 @@ int vmw_execbuf_ioctl(struct drm_device *dev, unsigned long data,
 		return -EINVAL;
 	}
 
+	index = array_index_nospec(arg.version - 1, DRM_VMW_EXECBUF_VERSION);
 	if (arg.version > 1 &&
 	    copy_from_user(&arg.context_handle,
 			   (void __user *) (data + copy_offset[0]),
-			   copy_offset[arg.version - 1] -
+			   copy_offset[index] -
 			   copy_offset[0]) != 0)
 		return -EFAULT;
 
