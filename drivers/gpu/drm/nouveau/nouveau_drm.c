@@ -1064,6 +1064,7 @@ nouveau_drm_pci_driver = {
 	.probe = nouveau_drm_probe,
 	.remove = nouveau_drm_remove,
 	.driver.pm = &nouveau_pm_ops,
+	.driver.suppress_bind_attrs = true,
 };
 
 struct drm_device *
