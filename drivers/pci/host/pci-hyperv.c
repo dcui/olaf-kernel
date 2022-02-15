@@ -972,6 +972,8 @@ static void hv_irq_unmask(struct irq_data *data)
 			goto exit_unlock;
 		}
 		cpumask_and(tmp, dest, irq_data_get_affinity_mask(data));
+		if (cpumask_empty(tmp))
+			cpumask_copy(tmp, dest);
 		for_each_cpu_and(cpu, tmp, cpu_online_mask) {
 			cpu_vmbus = hv_cpu_number_to_vp_number(cpu);
 
