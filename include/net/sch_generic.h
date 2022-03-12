@@ -117,6 +117,19 @@ static inline bool qdisc_run_begin(struct Qdisc *qdisc)
 	return true;
 }
 
+/* Intended to be used by unlocked users, when concurrent qdisc release is
+ * possible.
+ */
+
+static inline struct Qdisc *qdisc_refcount_inc_nz(struct Qdisc *qdisc)
+{
+	if (qdisc->flags & TCQ_F_BUILTIN)
+		return qdisc;
+	if (atomic_inc_not_zero(&qdisc->refcnt))
+		return qdisc;
+	return NULL;
+}
+
 static inline void qdisc_run_end(struct Qdisc *qdisc)
 {
 	write_seqcount_end(&qdisc->running);
@@ -418,6 +431,8 @@ struct Qdisc *dev_graft_qdisc(struct netdev_queue *dev_queue,
 			      struct Qdisc *qdisc);
 void qdisc_reset(struct Qdisc *qdisc);
 void qdisc_destroy(struct Qdisc *qdisc);
+void qdisc_put(struct Qdisc *qdisc);
+void qdisc_put_unlocked(struct Qdisc *qdisc);
 void qdisc_tree_reduce_backlog(struct Qdisc *qdisc, unsigned int n,
 			       unsigned int len);
 struct Qdisc *qdisc_alloc(struct netdev_queue *dev_queue,
