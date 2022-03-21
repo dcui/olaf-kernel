@@ -224,8 +224,9 @@ static inline int mlx5e_page_alloc_mapped(struct mlx5e_rq *rq,
 	if (unlikely(!dma_info->page))
 		return -ENOMEM;
 
-	dma_info->addr = dma_map_page(rq->pdev, dma_info->page, 0,
-				      RQ_PAGE_SIZE(rq), rq->buff.map_dir);
+	dma_info->addr = dma_map_page_attrs(rq->pdev, dma_info->page, 0,
+					    RQ_PAGE_SIZE(rq), rq->buff.map_dir,
+					    DMA_ATTR_SKIP_CPU_SYNC);
 	if (unlikely(dma_mapping_error(rq->pdev, dma_info->addr))) {
 		put_page(dma_info->page);
 		dma_info->page = NULL;
@@ -241,8 +242,8 @@ void mlx5e_page_release(struct mlx5e_rq *rq, struct mlx5e_dma_info *dma_info,
 	if (likely(recycle) && mlx5e_rx_cache_put(rq, dma_info))
 		return;
 
-	dma_unmap_page(rq->pdev, dma_info->addr, RQ_PAGE_SIZE(rq),
-		       rq->buff.map_dir);
+	dma_unmap_page_attrs(rq->pdev, dma_info->addr, RQ_PAGE_SIZE(rq),
+			     rq->buff.map_dir, DMA_ATTR_SKIP_CPU_SYNC);
 	put_page(dma_info->page);
 }
 
