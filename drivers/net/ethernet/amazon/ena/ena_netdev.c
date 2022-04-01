@@ -1562,14 +1562,13 @@ static void ena_del_napi(struct ena_adapter *adapter)
 
 static void ena_init_napi(struct ena_adapter *adapter)
 {
-	struct ena_napi *napi;
 	int i;
 
 	for (i = 0; i < adapter->num_io_queues; i++) {
-		napi = &adapter->ena_napi[i];
+		struct ena_napi *napi = &adapter->ena_napi[i];
 
 		netif_napi_add(adapter->netdev,
-			       &adapter->ena_napi[i].napi,
+			       &napi->napi,
 			       ena_io_poll,
 			       ENA_NAPI_BUDGET);
 		napi->rx_ring = &adapter->rx_ring[i];
