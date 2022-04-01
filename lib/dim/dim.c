@@ -54,6 +54,9 @@ void dim_park_tired(struct dim *dim)
 }
 EXPORT_SYMBOL(dim_park_tired);
 
+#define DIV_ROUND_DOWN_ULL(ll, d) \
+	({ unsigned long long _tmp = (ll); do_div(_tmp, d); _tmp; })
+
 void dim_calc_stats(struct dim_sample *start, struct dim_sample *end,
 		    struct dim_stats *curr_stats)
 {
@@ -74,8 +77,8 @@ void dim_calc_stats(struct dim_sample *start, struct dim_sample *end,
 					delta_us);
 	curr_stats->cpms = DIV_ROUND_UP(ncomps * USEC_PER_MSEC, delta_us);
 	if (curr_stats->epms != 0)
-		curr_stats->cpe_ratio =
-				(curr_stats->cpms * 100) / curr_stats->epms;
+		curr_stats->cpe_ratio = DIV_ROUND_DOWN_ULL(
+			curr_stats->cpms * 100, curr_stats->epms);
 	else
 		curr_stats->cpe_ratio = 0;
 
