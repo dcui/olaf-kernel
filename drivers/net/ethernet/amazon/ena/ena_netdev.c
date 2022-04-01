@@ -832,9 +832,9 @@ static struct sk_buff *ena_rx_skb(struct ena_ring *rx_ring,
 				  u32 descs,
 				  u16 *next_to_clean)
 {
-	struct sk_buff *skb;
 	struct ena_rx_buffer *rx_info;
 	u16 len, req_id, buf = 0;
+	struct sk_buff *skb;
 	void *va;
 
 	len = ena_bufs[buf].len;
