@@ -155,6 +155,7 @@ struct ena_napi {
 	struct napi_struct napi ____cacheline_aligned;
 	struct ena_ring *tx_ring;
 	struct ena_ring *rx_ring;
+	bool first_interrupt;
 	u32 qid;
 	struct dim dim;
 };
