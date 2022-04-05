@@ -70,6 +70,8 @@ static int debug = -1;
 module_param(debug, int, S_IRUGO);
 MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
 
+static LIST_HEAD(netvsc_dev_list);
+
 static void netvsc_change_rx_flags(struct net_device *net, int change)
 {
 	struct net_device_context *ndev_ctx = netdev_priv(net);
@@ -493,7 +495,7 @@ static int netvsc_vf_xmit(struct net_device *net, struct net_device *vf_netdev,
 	int rc;
 
 	skb->dev = vf_netdev;
-	skb->queue_mapping = qdisc_skb_cb(skb)->slave_dev_queue_mapping;
+	skb_record_rx_queue(skb, qdisc_skb_cb(skb)->slave_dev_queue_mapping);
 
 	rc = dev_queue_xmit(skb);
 	if (likely(rc == NET_XMIT_SUCCESS || rc == NET_XMIT_CN)) {
@@ -1762,13 +1764,10 @@ out_unlock:
 
 static struct net_device *get_netvsc_bymac(const u8 *mac)
 {
-	struct net_device *dev;
+	struct net_device_context *ndev_ctx;
 
-	ASSERT_RTNL();
-
-	for_each_netdev(&init_net, dev) {
-		if (dev->netdev_ops != &device_ops)
-			continue;	/* not a netvsc device */
+	list_for_each_entry(ndev_ctx, &netvsc_dev_list, list) {
+		struct net_device *dev = hv_get_drvdata(ndev_ctx->device_ctx);
 
 		if (ether_addr_equal(mac, dev->perm_addr))
 			return dev;
@@ -1779,25 +1778,18 @@ static struct net_device *get_netvsc_bymac(const u8 *mac)
 
 static struct net_device *get_netvsc_byref(struct net_device *vf_netdev)
 {
+	struct net_device_context *net_device_ctx;
 	struct net_device *dev;
 
-	ASSERT_RTNL();
+	dev = netdev_master_upper_dev_get(vf_netdev);
+	if (!dev || dev->netdev_ops != &device_ops)
+		return NULL;	/* not a netvsc device */
 
-	for_each_netdev(&init_net, dev) {
-		struct net_device_context *net_device_ctx;
+	net_device_ctx = netdev_priv(dev);
+	if (!rtnl_dereference(net_device_ctx->nvdev))
+		return NULL;	/* device is removed */
 
-		if (dev->netdev_ops != &device_ops)
-			continue;	/* not a netvsc device */
-
-		net_device_ctx = netdev_priv(dev);
-		if (!rtnl_dereference(net_device_ctx->nvdev))
-			continue;	/* device is removed */
-
-		if (rtnl_dereference(net_device_ctx->vf_netdev) == vf_netdev)
-			return dev;	/* a match */
-	}
-
-	return NULL;
+	return dev;
 }
 
 /* Called when VF is injecting data into network stack.
@@ -1918,6 +1910,7 @@ static int netvsc_register_vf(struct net_device *vf_netdev)
 	struct net_device_context *net_device_ctx;
 	struct device *pdev = vf_netdev->dev.parent;
 	struct netvsc_device *netvsc_dev;
+	int ret;
 
 	if (vf_netdev->addr_len != ETH_ALEN)
 		return NOTIFY_DONE;
@@ -1939,13 +1932,34 @@ static int netvsc_register_vf(struct net_device *vf_netdev)
 	if (!netvsc_dev || rtnl_dereference(net_device_ctx->vf_netdev))
 		return NOTIFY_DONE;
 
-	if (netvsc_vf_join(vf_netdev, ndev) != 0)
+	/* if syntihetic interface is a different namespace,
+	 * then move the VF to that namespace; join will be
+	 * done again in that context.
+	 */
+	if (!net_eq(dev_net(ndev), dev_net(vf_netdev))) {
+		ret = dev_change_net_namespace(vf_netdev,
+					       dev_net(ndev), "eth%d");
+		if (ret)
+			netdev_err(vf_netdev,
+				   "could not move to same namespace as %s: %d\n",
+				   ndev->name, ret);
+		else
+			netdev_info(vf_netdev,
+				    "VF moved to namespace with: %s\n",
+				    ndev->name);
 		return NOTIFY_DONE;
+	}
 
 	netdev_info(ndev, "VF registering: %s\n", vf_netdev->name);
 
+	if (netvsc_vf_join(vf_netdev, ndev) != 0)
+		return NOTIFY_DONE;
+
 	dev_hold(vf_netdev);
 	rcu_assign_pointer(net_device_ctx->vf_netdev, vf_netdev);
+	if (ndev->needed_headroom < vf_netdev->needed_headroom)
+		ndev->needed_headroom = vf_netdev->needed_headroom;
+
 	return NOTIFY_OK;
 }
 
@@ -1991,6 +2005,8 @@ static int netvsc_unregister_vf(struct net_device *vf_netdev)
 	netdev_upper_dev_unlink(vf_netdev, ndev);
 	RCU_INIT_POINTER(net_device_ctx->vf_netdev, NULL);
 	dev_put(vf_netdev);
+
+	ndev->needed_headroom = RNDIS_AND_PPI_SIZE;
 
 	return NOTIFY_OK;
 }
@@ -2081,15 +2097,19 @@ static int netvsc_probe(struct hv_device *dev,
 	else
 		net->max_mtu = ETH_DATA_LEN;
 
-	ret = register_netdev(net);
+	rtnl_lock();
+	ret = register_netdevice(net);
 	if (ret != 0) {
 		pr_err("Unable to register netdev.\n");
 		goto register_failed;
 	}
 
-	return ret;
+	list_add(&net_device_ctx->list, &netvsc_dev_list);
+	rtnl_unlock();
+	return 0;
 
 register_failed:
+	rtnl_unlock();
 	rndis_filter_device_remove(dev, nvdev);
 rndis_failed:
 	free_percpu(net_device_ctx->vf_stats);
@@ -2133,6 +2153,7 @@ static int netvsc_remove(struct hv_device *dev)
 		rndis_filter_device_remove(dev, nvdev);
 
 	unregister_netdevice(net);
+	list_del(&ndev_ctx->list);
 
 	rtnl_unlock();
 
