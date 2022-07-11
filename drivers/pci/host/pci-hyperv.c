@@ -1414,7 +1414,6 @@ static void prepopulate_bars(struct hv_pcibus_device *hbus)
 	struct list_head *iter;
 	unsigned long flags;
 	u64 bar_val;
-	u32 command;
 	bool high;
 	int i;
 
