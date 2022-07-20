@@ -2684,8 +2684,6 @@ static int fbcon_modechange_possible(struct fb_info *info,
 	struct vc_data *vc;
 	unsigned int i;
 
-	WARN_CONSOLE_UNLOCKED();
-
 	if (!ops)
 		return 0;
 
