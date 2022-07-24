@@ -390,5 +390,5 @@ ENTRY(poly1305_4block_avx2)
 	pop		%r13
 	pop		%r12
 	pop		%rbx
-	ret
+	RET
 ENDPROC(poly1305_4block_avx2)

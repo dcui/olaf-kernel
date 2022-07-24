@@ -58,7 +58,7 @@ ENTRY(efi64_thunk)
 	movq	efi_saved_sp(%rip), %rsp
 	pop	%rbx
 	pop	%rbp
-	retq
+	RET
 ENDPROC(efi64_thunk)
 
 /*
@@ -112,14 +112,14 @@ ENTRY(__efi64_thunk)
 	shl	$32, %rax
 	or	%rcx, %rax
 1:
-	ret
+	RET
 ENDPROC(__efi64_thunk)
 
 ENTRY(efi_exit32)
 	movq	func_rt_ptr(%rip), %rax
 	push	%rax
 	mov	%rdi, %rax
-	ret
+	RET
 ENDPROC(efi_exit32)
 
 	.code32

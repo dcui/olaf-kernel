@@ -104,7 +104,7 @@ relocate_kernel:
 	/* jump to identity mapped page */
 	addq	$(identity_mapped - relocate_kernel), %r8
 	pushq	%r8
-	ret
+	RET
 
 identity_mapped:
 	/* set return address to 0 if not preserving context */
@@ -189,7 +189,7 @@ identity_mapped:
 	xorl	%r14d, %r14d
 	xorl	%r15d, %r15d
 
-	ret
+	RET
 
 1:
 	popq	%rdx
@@ -210,7 +210,7 @@ identity_mapped:
 	call	swap_pages
 	movq	$virtual_mapped, %rax
 	pushq	%rax
-	ret
+	RET
 
 virtual_mapped:
 	movq	RSP(%r8), %rsp
@@ -229,7 +229,7 @@ virtual_mapped:
 	popq	%r12
 	popq	%rbp
 	popq	%rbx
-	ret
+	RET
 
 	/* Do the copies */
 swap_pages:
@@ -284,7 +284,7 @@ swap_pages:
 	lea	PAGE_SIZE(%rax), %rsi
 	jmp	0b
 3:
-	ret
+	RET
 
 	.globl kexec_control_code_size
 .set kexec_control_code_size, . - relocate_kernel

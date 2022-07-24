@@ -331,7 +331,7 @@ ENTRY(switch_to_thread_stack_compat)
 	UNWIND_HINT_FUNC
 
 .Lcompat_keep_stack:
-	ret
+	RET
 END(switch_to_thread_stack_compat)
 
 /*

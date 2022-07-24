@@ -75,7 +75,7 @@ ENTRY(efi_call_phys)
 	 */
 	movl	saved_return_addr(%edx), %ecx
 	pushl	%ecx
-	ret
+	RET
 ENDPROC(efi_call_phys)
 .previous
 

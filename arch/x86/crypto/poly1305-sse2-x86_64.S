@@ -275,7 +275,7 @@ ENTRY(poly1305_block_sse2)
 	add		$0x10,%rsp
 	pop		%r12
 	pop		%rbx
-	ret
+	RET
 ENDPROC(poly1305_block_sse2)
 
 
@@ -586,5 +586,5 @@ ENTRY(poly1305_2block_sse2)
 	pop		%r13
 	pop		%r12
 	pop		%rbx
-	ret
+	RET
 ENDPROC(poly1305_2block_sse2)

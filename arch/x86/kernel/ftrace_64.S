@@ -150,7 +150,7 @@ EXPORT_SYMBOL(mcount)
 #ifdef CONFIG_DYNAMIC_FTRACE
 
 ENTRY(function_hook)
-	retq
+	RET
 ENDPROC(function_hook)
 
 ENTRY(ftrace_caller)
@@ -186,7 +186,7 @@ GLOBAL(ftrace_graph_call)
 
 /* This is weak to keep gas from relaxing the jumps */
 WEAK(ftrace_stub)
-	retq
+	RET
 ENDPROC(ftrace_caller)
 
 ENTRY(ftrace_regs_caller)
@@ -277,7 +277,7 @@ fgraph_trace:
 #endif
 
 GLOBAL(ftrace_stub)
-	retq
+	RET
 
 trace:
 	/* save_mcount_regs fills in first two parameters */
@@ -315,7 +315,7 @@ ENTRY(ftrace_graph_caller)
 
 	restore_mcount_regs
 
-	retq
+	RET
 ENDPROC(ftrace_graph_caller)
 
 ENTRY(return_to_handler)

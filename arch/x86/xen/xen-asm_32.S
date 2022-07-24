@@ -32,7 +32,7 @@ check_events:
 	pop %edx
 	pop %ecx
 	pop %eax
-	ret
+	RET
 
 /*
  * This is run where a normal iret would be run, with the same stack setup:

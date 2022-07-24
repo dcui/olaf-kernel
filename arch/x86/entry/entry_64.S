@@ -1024,7 +1024,7 @@ ENTRY(do_softirq_own_stack)
 	call	__do_softirq
 	LEAVE_IRQ_STACK regs=0
 	leaveq
-	ret
+	RET
 ENDPROC(do_softirq_own_stack)
 
 #ifdef CONFIG_XEN
@@ -1165,7 +1165,7 @@ ENTRY(paranoid_entry)
 	 */
 	FENCE_SWAPGS_KERNEL_ENTRY
 
-	ret
+	RET
 END(paranoid_entry)
 
 /*
@@ -1233,7 +1233,7 @@ ENTRY(error_entry)
 	 */
 	TRACE_IRQS_OFF
 	CALL_enter_from_user_mode
-	ret
+	RET
 
 .Lerror_entry_done_lfence:
 	FENCE_SWAPGS_KERNEL_ENTRY
