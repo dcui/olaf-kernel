@@ -4180,7 +4180,6 @@
 			eibrs		  - enhanced IBRS
 			eibrs,retpoline   - enhanced IBRS + Retpolines
 			eibrs,lfence      - enhanced IBRS + LFENCE
-			ibrs		  - Intel/AMD microcode feature
 
 			Not specifying this option is equivalent to
 			spectre_v2=auto.
