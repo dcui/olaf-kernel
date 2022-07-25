@@ -3,7 +3,6 @@
  *
  * Copyright 2000-2002 Andi Kleen, SuSE Labs.
  */
-#include "calling.h"
 #include <asm/asm-offsets.h>
 #include <asm/current.h>
 #include <asm/errno.h>
@@ -16,6 +15,8 @@
 #include <asm/nospec-branch.h>
 #include <linux/linkage.h>
 #include <linux/err.h>
+
+#include "calling.h"
 
 	.section .entry.text, "ax"
 
@@ -106,6 +107,7 @@ ENTRY(entry_SYSENTER_compat)
 	xorl	%r15d, %r15d		/* nospec   r15 */
 	cld
 
+	IBRS_ENTER
 	UNTRAIN_RET
 
 	/*
@@ -252,6 +254,7 @@ GLOBAL(entry_SYSCALL_compat_after_hwframe)
 	 */
 	TRACE_IRQS_OFF
 
+	IBRS_ENTER
 	UNTRAIN_RET
 
 	movq	%rsp, %rdi
@@ -262,6 +265,8 @@ GLOBAL(entry_SYSCALL_compat_after_hwframe)
 
 	/* Opportunistic SYSRET */
 sysret32_from_system_call:
+	IBRS_EXIT
+
 	TRACE_IRQS_ON			/* User mode traces as IRQs on. */
 	movq	RBX(%rsp), %rbx		/* pt_regs->rbx */
 	movq	RBP(%rsp), %rbp		/* pt_regs->rbp */
@@ -419,6 +424,7 @@ ENTRY(entry_INT80_compat)
 	 */
 	TRACE_IRQS_OFF
 
+	IBRS_ENTER
 	UNTRAIN_RET
 
 	movq	%rsp, %rdi
