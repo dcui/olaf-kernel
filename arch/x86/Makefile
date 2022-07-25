@@ -241,6 +241,9 @@ ifdef CONFIG_SLS
   KBUILD_CFLAGS += $(call cc-option,-mharden-sls=all)
 endif
 
+# RETHUNK
+KBUILD_CFLAGS += $(call cc-option,-mfunction-return=thunk-extern)
+
 archscripts: scripts_basic
 	$(Q)$(MAKE) $(build)=arch/x86/tools relocs
 

@@ -439,6 +439,9 @@ config SLS
 	  against straight line speculation. The kernel image might be slightly
 	  larger.
 
+config CC_HAS_RETURN_THUNK
+       def_bool y
+
 config INTEL_RDT
 	bool "Intel Resource Director Technology support"
 	default n
