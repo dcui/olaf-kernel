@@ -46,3 +46,13 @@ GENERATE_THUNK(r13)
 GENERATE_THUNK(r14)
 GENERATE_THUNK(r15)
 #endif
+/*
+ * This function name is magical and is used by -mfunction-return=thunk-extern
+ * for the compiler to generate JMPs to it.
+ */
+ENTRY(__x86_return_thunk)
+	ret
+	int3
+ENDPROC(__x86_return_thunk)
+
+__EXPORT_THUNK(__x86_return_thunk)

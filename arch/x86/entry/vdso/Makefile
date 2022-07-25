@@ -66,6 +66,7 @@ endef
 $(obj)/vdso-image-%.c: $(obj)/vdso%.so.dbg $(obj)/vdso%.so $(obj)/vdso2c FORCE
 	$(call if_changed,vdso2c)
 
+RETPOLINE_VDSO_CFLAGS   := $(call cc-option,-mindirect-branch=thunk-inline -mindirect-branch-register)
 #
 # Don't omit frame pointers for ease of userspace debugging, but do
 # optimize sibling calls.
