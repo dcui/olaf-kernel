@@ -233,6 +233,10 @@ ifdef CONFIG_RETPOLINE
   KBUILD_CFLAGS += $(RETPOLINE_CFLAGS) -DRETPOLINE
 endif
 
+ifdef CONFIG_SLS
+  KBUILD_CFLAGS += $(call cc-option,-mharden-sls=all)
+endif
+
 archscripts: scripts_basic
 	$(Q)$(MAKE) $(build)=arch/x86/tools relocs
 

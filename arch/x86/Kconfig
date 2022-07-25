@@ -430,6 +430,15 @@ config RETPOLINE
 	  branches. Requires a compiler with -mindirect-branch=thunk-extern
 	  support for full protection. The kernel may run slower.
 
+config SLS
+	bool "Mitigate Straight-Line-Speculation"
+	depends on X86_64
+	default n
+	help
+	  Compile the kernel with straight-line-speculation options to guard
+	  against straight line speculation. The kernel image might be slightly
+	  larger.
+
 config INTEL_RDT
 	bool "Intel Resource Director Technology support"
 	default n
