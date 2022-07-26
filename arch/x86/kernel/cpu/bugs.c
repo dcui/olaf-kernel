@@ -1296,23 +1296,6 @@ static enum spectre_v2_mitigation_cmd __init spectre_v2_parse_cmdline(void)
 	return cmd;
 }
 
-/* Check for Skylake-like CPUs (for RSB handling) */
-static bool __init is_skylake_era(void)
-{
-	if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL &&
-	    boot_cpu_data.x86 == 6) {
-		switch (boot_cpu_data.x86_model) {
-		case INTEL_FAM6_SKYLAKE_L:
-		case INTEL_FAM6_SKYLAKE:
-		case INTEL_FAM6_SKYLAKE_X:
-		case INTEL_FAM6_KABYLAKE_L:
-		case INTEL_FAM6_KABYLAKE:
-			return true;
-		}
-	}
-	return false;
-}
-
 static enum spectre_v2_mitigation __init spectre_v2_select_retpoline(void)
 {
 	if (!IS_ENABLED(CONFIG_RETPOLINE)) {
