@@ -411,7 +411,7 @@ static ssize_t show_valid_zones(struct device *dev,
 	 * This can happen e.g. for ZONE_DMA and ZONE_DMA32
 	 */
 	if (!test_pages_in_a_zone(start_pfn, start_pfn + nr_pages, &valid_start_pfn, &valid_end_pfn))
-		return sprintf(buf, "none\n");
+		return sysfs_emit(buf, "none\n");
 
 	start_pfn = valid_start_pfn;
 	nr_pages = valid_end_pfn - start_pfn;
