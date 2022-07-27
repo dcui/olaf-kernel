@@ -54,13 +54,13 @@ static DEVICE_ATTR(cpulist, S_IRUGO, node_read_cpulist, NULL);
 static ssize_t node_read_meminfo(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
-	int n;
+	int len = 0;
 	int nid = dev->id;
 	struct pglist_data *pgdat = NODE_DATA(nid);
 	struct sysinfo i;
 
 	si_meminfo_node(&i, nid);
-	n = sysfs_emit(buf,
+	len = sysfs_emit(buf,
 		       "Node %d MemTotal:       %8lu kB\n"
 		       "Node %d MemFree:        %8lu kB\n"
 		       "Node %d MemUsed:        %8lu kB\n"
@@ -87,7 +87,7 @@ static ssize_t node_read_meminfo(struct device *dev,
 		       nid, K(sum_zone_node_page_state(nid, NR_MLOCK)));
 
 #ifdef CONFIG_HIGHMEM
-	n += sprintf(buf + n,
+	len += sysfs_emit_at(buf, len,
 		       "Node %d HighTotal:      %8lu kB\n"
 		       "Node %d HighFree:       %8lu kB\n"
 		       "Node %d LowTotal:       %8lu kB\n"
@@ -97,7 +97,7 @@ static ssize_t node_read_meminfo(struct device *dev,
 		       nid, K(i.totalram - i.totalhigh),
 		       nid, K(i.freeram - i.freehigh));
 #endif
-	n += sprintf(buf + n,
+	len += sysfs_emit_at(buf, len,
 		       "Node %d Dirty:          %8lu kB\n"
 		       "Node %d Writeback:      %8lu kB\n"
 		       "Node %d FilePages:      %8lu kB\n"
@@ -143,8 +143,8 @@ static ssize_t node_read_meminfo(struct device *dev,
 #else
 		       nid, K(sum_zone_node_page_state(nid, NR_SLAB_UNRECLAIMABLE)));
 #endif
-	n += hugetlb_report_node_meminfo(nid, buf + n);
-	return n;
+	len += hugetlb_report_node_meminfo(nid, buf + len);
+	return len;
 }
 
 #undef K
@@ -175,28 +175,28 @@ static ssize_t node_read_vmstat(struct device *dev,
 	int nid = dev->id;
 	struct pglist_data *pgdat = NODE_DATA(nid);
 	int i;
-	int n = 0;
+	int len = 0;
 
 	for (i = 0; i < NR_VM_ZONE_STAT_ITEMS; i++)
-		n += sprintf(buf+n, "%s %lu\n", vmstat_text[i],
+		len += sysfs_emit_at(buf, len, "%s %lu\n", vmstat_text[i],
 			     sum_zone_node_page_state(nid, i));
 
 #ifdef CONFIG_NUMA
 	for (i = 0; i < NR_VM_NUMA_STAT_ITEMS; i++)
-		n += sprintf(buf+n, "%s %lu\n",
+		len += sysfs_emit_at(buf, len, "%s %lu\n",
 			     vmstat_text[i + NR_VM_ZONE_STAT_ITEMS],
 			     sum_zone_numa_state(nid, i));
 #endif
 
 	for (i = 0; i < NR_VM_NODE_STAT_ITEMS; i++)
-		n += sprintf(buf+n, "%s %lu\n",
+		len += sysfs_emit_at(buf, len, "%s %lu\n",
 			     vmstat_text[i + NR_VM_ZONE_STAT_ITEMS +
 			     NR_VM_NUMA_STAT_ITEMS],
 			     node_page_state(pgdat, i));
 
-	return n;
+	return len;
 }
-static DEVICE_ATTR(vmstat, S_IRUGO, node_read_vmstat, NULL);
+static DEVICE_ATTR(vmstat, 0444, node_read_vmstat, NULL);
 
 static ssize_t node_read_distance(struct device *dev,
 			struct device_attribute *attr, char *buf)
@@ -211,13 +211,15 @@ static ssize_t node_read_distance(struct device *dev,
 	 */
 	BUILD_BUG_ON(MAX_NUMNODES * 4 > PAGE_SIZE);
 
-	for_each_online_node(i)
-		len += sprintf(buf + len, "%s%d", i ? " " : "", node_distance(nid, i));
+	for_each_online_node(i) {
+		len += sysfs_emit_at(buf, len, "%s%d",
+				     i ? " " : "", node_distance(nid, i));
+	}
 
-	len += sprintf(buf + len, "\n");
+	len += sysfs_emit_at(buf, len, "\n");
 	return len;
 }
-static DEVICE_ATTR(distance, S_IRUGO, node_read_distance, NULL);
+static DEVICE_ATTR(distance, 0444, node_read_distance, NULL);
 
 static struct attribute *node_dev_attrs[] = {
 	&dev_attr_cpumap.attr,
@@ -615,17 +617,6 @@ void unregister_one_node(int nid)
  * node states attributes
  */
 
-static ssize_t print_nodes_state(enum node_states state, char *buf)
-{
-	int n;
-
-	n = scnprintf(buf, PAGE_SIZE - 1, "%*pbl",
-		      nodemask_pr_args(&node_states[state]));
-	buf[n++] = '\n';
-	buf[n] = '\0';
-	return n;
-}
-
 struct node_attr {
 	struct device_attribute attr;
 	enum node_states state;
@@ -635,7 +626,9 @@ static ssize_t show_node_state(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
 	struct node_attr *na = container_of(attr, struct node_attr, attr);
-	return print_nodes_state(na->state, buf);
+
+	return sysfs_emit(buf, "%*pbl\n",
+			  nodemask_pr_args(&node_states[na->state]));
 }
 
 #define _NODE_ATTR(name, state) \
