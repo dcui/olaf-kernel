@@ -404,6 +404,7 @@ static ssize_t show_valid_zones(struct device *dev,
 	unsigned long nr_pages = PAGES_PER_SECTION * sections_per_block;
 	unsigned long valid_start_pfn, valid_end_pfn;
 	bool append = false;
+	int len = 0;
 	int nid;
 
 	/*
@@ -421,25 +422,25 @@ static ssize_t show_valid_zones(struct device *dev,
 	 * online nodes otherwise the page_zone is not reliable
 	 */
 	if (mem->state == MEM_ONLINE) {
-		strcat(buf, page_zone(pfn_to_page(start_pfn))->name);
+		len += sysfs_emit_at(buf, len, "%s", page_zone(pfn_to_page(start_pfn))->name);
 		goto out;
 	}
 
 	nid = pfn_to_nid(start_pfn);
 	if (allow_online_pfn_range(nid, start_pfn, nr_pages, MMOP_ONLINE_KERNEL)) {
-		strcat(buf, default_zone_for_pfn(nid, start_pfn, nr_pages)->name);
+		len += sysfs_emit_at(buf, len, "%s", default_zone_for_pfn(nid, start_pfn, nr_pages)->name);
 		append = true;
 	}
 
 	if (allow_online_pfn_range(nid, start_pfn, nr_pages, MMOP_ONLINE_MOVABLE)) {
 		if (append)
-			strcat(buf, " ");
-		strcat(buf, NODE_DATA(nid)->node_zones[ZONE_MOVABLE].name);
+			len += sysfs_emit_at(buf, len, " ");
+		len += sysfs_emit_at(buf, len, "%s", NODE_DATA(nid)->node_zones[ZONE_MOVABLE].name);
 	}
 out:
-	strcat(buf, "\n");
+	len += sysfs_emit_at(buf, len, "\n");
 
-	return strlen(buf);
+	return len;
 }
 static DEVICE_ATTR(valid_zones, 0444, show_valid_zones, NULL);
 #endif
