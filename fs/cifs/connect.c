@@ -1052,7 +1052,6 @@ static void clean_demultiplex_info(struct TCP_Server_Info *server)
 		 */
 	}
 
-	kfree(server->hostname);
 	kfree(server);
 
 	length = atomic_dec_return(&tcpSesAllocCount);
@@ -1605,6 +1604,10 @@ cifs_parse_devname(const char *devname, struct smb_vol *vol)
 	pos = strpbrk(devname + 2, delims);
 	if (!pos)
 		return -EINVAL;
+
+	vol->server_hostname = kstrndup(devname + 2, pos - devname - 2, GFP_KERNEL);
+	if (!vol->server_hostname)
+		return -ENOMEM;
 
 	/* skip past delimiter */
 	++pos;
@@ -2661,6 +2664,9 @@ static int match_server(struct TCP_Server_Info *server, struct smb_vol *vol)
 	if (!net_eq(cifs_net_ns(server), current->nsproxy->net_ns))
 		return 0;
 
+	if (strcasecmp(server->hostname, vol->server_hostname))
+		return 0;
+
 	if (!match_address(server, addr,
 			   (struct sockaddr *)&vol->srcaddr))
 		return 0;
@@ -2745,6 +2751,7 @@ cifs_put_tcp_session(struct TCP_Server_Info *server, int from_reconnect)
 	kfree(server->session_key.response);
 	server->session_key.response = NULL;
 	server->session_key.len = 0;
+	kfree(server->hostname);
 
 	task = xchg(&server->tsk, NULL);
 	if (task)
@@ -2770,14 +2777,15 @@ cifs_get_tcp_session(struct smb_vol *volume_info)
 		goto out_err;
 	}
 
+	tcp_ses->hostname = kstrdup(volume_info->server_hostname, GFP_KERNEL);
+	if (!tcp_ses->hostname) {
+		rc = -ENOMEM;
+		goto out_err;
+	}
+
 	tcp_ses->ops = volume_info->ops;
 	tcp_ses->vals = volume_info->vals;
 	cifs_set_net_ns(tcp_ses, get_net(current->nsproxy->net_ns));
-	tcp_ses->hostname = extract_hostname(volume_info->UNC);
-	if (IS_ERR(tcp_ses->hostname)) {
-		rc = PTR_ERR(tcp_ses->hostname);
-		goto out_err_crypto_release;
-	}
 
 	tcp_ses->noblocksnd = volume_info->noblocksnd;
 	tcp_ses->noautotune = volume_info->noautotune;
@@ -2890,8 +2898,7 @@ out_err_crypto_release:
 
 out_err:
 	if (tcp_ses) {
-		if (!IS_ERR(tcp_ses->hostname))
-			kfree(tcp_ses->hostname);
+		kfree(tcp_ses->hostname);
 		if (tcp_ses->ssocket)
 			sock_release(tcp_ses->ssocket);
 		kfree(tcp_ses);

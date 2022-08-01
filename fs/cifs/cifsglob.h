@@ -542,6 +542,7 @@ struct smb_version_values {
 struct smb_vol {
 	char *username;
 	char *password;
+	char *server_hostname;
 	char *domainname;
 	char *UNC;
 	char *iocharset;  /* local code page for mapping to and from Unicode */
