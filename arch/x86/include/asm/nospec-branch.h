@@ -138,14 +138,28 @@
 #endif
 .endm
 
+.macro ISSUE_UNBALANCED_RET_GUARD
+	call .Lunbalanced_ret_guard_\@
+	int3
+.Lunbalanced_ret_guard_\@:
+	add $(BITS_PER_LONG/8), %_ASM_SP
+	lfence
+.endm
+
  /*
   * A simpler FILL_RETURN_BUFFER macro. Don't make people use the CPP
   * monstrosity above, manually.
   */
-.macro FILL_RETURN_BUFFER reg:req nr:req ftr:req
 #ifdef CONFIG_RETPOLINE
+.macro FILL_RETURN_BUFFER reg:req nr:req ftr:req ftr2
+.ifb \ftr2
 	ALTERNATIVE "jmp .Lskip_rsb_\@", "", \ftr
+.else
+	ALTERNATIVE_2 "jmp .Lskip_rsb_\@", "", \ftr, "jmp .Lunbalanced_\@", \ftr2
+.endif
 	__FILL_RETURN_BUFFER(\reg,\nr,%_ASM_SP)
+.Lunbalanced_\@:
+	ISSUE_UNBALANCED_RET_GUARD
 .Lskip_rsb_\@:
 #endif
 .endm
@@ -284,13 +298,20 @@ static inline void vmexit_fill_RSB(void)
 #ifdef CONFIG_RETPOLINE
 	unsigned long loops;
 
-	asm volatile (ANNOTATE_NOSPEC_ALTERNATIVE
-		      ALTERNATIVE("jmp 910f",
-				  __stringify(__FILL_RETURN_BUFFER(%0, RSB_CLEAR_LOOPS, %1)),
-				  X86_FEATURE_RETPOLINE)
-		      "910:"
+	asm volatile(ANNOTATE_NOSPEC_ALTERNATIVE
+		     ALTERNATIVE_2("jmp .Lskip_rsb",
+				   "", X86_FEATURE_RSB_VMEXIT,
+				   "jmp .Lunbalanced", X86_FEATURE_RSB_VMEXIT_LITE)
+				   __stringify(__FILL_RETURN_BUFFER(%0,RSB_CLEAR_LOOPS,%1))
+				   ".Lunbalanced:\n\t"
+				   "call .Lunbalanced_ret_guard\n\t"
+				   "int3\n\t"
+				   ".Lunbalanced_ret_guard:\n\t"
+				   __stringify(add $(BITS_PER_LONG/8))", %1\n\t"
+				   "lfence\n\t"
+				   ".Lskip_rsb:\n\t"
 		      : "=r" (loops), ASM_CALL_CONSTRAINT
-		      : : "memory" );
+		      : : "memory");
 #endif
 }
 
