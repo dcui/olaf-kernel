@@ -368,6 +368,55 @@ struct pci_controller* pci_find_hose_for_OF_device(struct device_node* node)
 	return NULL;
 }
 
+struct pci_intx_virq {
+	int virq;
+	struct kref kref;
+	struct list_head list_node;
+};
+
+static LIST_HEAD(intx_list);
+static DEFINE_MUTEX(intx_mutex);
+
+static void ppc_pci_intx_release(struct kref *kref)
+{
+	struct pci_intx_virq *vi = container_of(kref, struct pci_intx_virq, kref);
+
+	list_del(&vi->list_node);
+	irq_dispose_mapping(vi->virq);
+	kfree(vi);
+}
+
+static int ppc_pci_unmap_irq_line(struct notifier_block *nb,
+			       unsigned long action, void *data)
+{
+	struct pci_dev *pdev = to_pci_dev(data);
+
+	if (action == BUS_NOTIFY_DEL_DEVICE) {
+		struct pci_intx_virq *vi;
+
+		mutex_lock(&intx_mutex);
+		list_for_each_entry(vi, &intx_list, list_node) {
+			if (vi->virq == pdev->irq) {
+				kref_put(&vi->kref, ppc_pci_intx_release);
+				break;
+			}
+		}
+		mutex_unlock(&intx_mutex);
+	}
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block ppc_pci_unmap_irq_notifier = {
+	.notifier_call = ppc_pci_unmap_irq_line,
+};
+
+static int ppc_pci_register_irq_notifier(void)
+{
+	return bus_register_notifier(&pci_bus_type, &ppc_pci_unmap_irq_notifier);
+}
+arch_initcall(ppc_pci_register_irq_notifier);
+
 /*
  * Reads the interrupt pin to determine if interrupt is use by card.
  * If the interrupt is used, then gets the interrupt line from the
@@ -375,8 +424,13 @@ struct pci_controller* pci_find_hose_for_OF_device(struct device_node* node)
  */
 static int pci_read_irq_line(struct pci_dev *pci_dev)
 {
-	struct of_phandle_args oirq;
-	unsigned int virq;
+	int virq;
+	struct pci_intx_virq *vi, *vitmp;
+
+	/* Preallocate vi as rewind is complex if this fails after mapping */
+	vi = kzalloc(sizeof(struct pci_intx_virq), GFP_KERNEL);
+	if (!vi)
+		return -1;
 
 	pr_debug("PCI: Try to map irq for %s...\n", pci_name(pci_dev));
 
@@ -384,7 +438,8 @@ static int pci_read_irq_line(struct pci_dev *pci_dev)
 	memset(&oirq, 0xff, sizeof(oirq));
 #endif
 	/* Try to get a mapping from the device-tree */
-	if (of_irq_parse_pci(pci_dev, &oirq)) {
+	virq = of_irq_parse_and_map_pci(pci_dev, 0, 0);
+	if (virq <= 0) {
 		u8 line, pin;
 
 		/* If that fails, lets fallback to what is in the config
@@ -395,12 +450,12 @@ static int pci_read_irq_line(struct pci_dev *pci_dev)
 		 * function.
 		 */
 		if (pci_read_config_byte(pci_dev, PCI_INTERRUPT_PIN, &pin))
-			return -1;
+			goto error_exit;
 		if (pin == 0)
-			return -1;
+			goto error_exit;
 		if (pci_read_config_byte(pci_dev, PCI_INTERRUPT_LINE, &line) ||
 		    line == 0xff || line == 0) {
-			return -1;
+			goto error_exit;
 		}
 		pr_debug(" No map ! Using line %d (pin %d) from PCI config\n",
 			 line, pin);
@@ -408,24 +463,37 @@ static int pci_read_irq_line(struct pci_dev *pci_dev)
 		virq = irq_create_mapping(NULL, line);
 		if (virq)
 			irq_set_irq_type(virq, IRQ_TYPE_LEVEL_LOW);
-	} else {
-		pr_debug(" Got one, spec %d cells (0x%08x 0x%08x...) on %s\n",
-			 oirq.args_count, oirq.args[0], oirq.args[1],
-			 of_node_full_name(oirq.np));
-
-		virq = irq_create_of_mapping(&oirq);
 	}
 
 	if (!virq) {
 		pr_debug(" Failed to map !\n");
-		return -1;
+		goto error_exit;
 	}
 
 	pr_debug(" Mapped to linux irq %d\n", virq);
 
 	pci_dev->irq = virq;
 
+	mutex_lock(&intx_mutex);
+	list_for_each_entry(vitmp, &intx_list, list_node) {
+		if (vitmp->virq == virq) {
+			kref_get(&vitmp->kref);
+			kfree(vi);
+			vi = NULL;
+			break;
+		}
+	}
+	if (vi) {
+		vi->virq = virq;
+		kref_init(&vi->kref);
+		list_add_tail(&vi->list_node, &intx_list);
+	}
+	mutex_unlock(&intx_mutex);
+
 	return 0;
+error_exit:
+	kfree(vi);
+	return -1;
 }
 
 /*
