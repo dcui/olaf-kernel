@@ -878,14 +878,13 @@ int vt_ioctl(struct tty_struct *tty,
 				continue;
 			console_lock();
 			vcp = vc_cons[i].d;
-
 			if (vcp) {
 				if (vlin)
-					vc_cons[i].d->vc_scan_lines = vlin;
+					vcp->vc_scan_lines = vlin;
 				if (clin)
-					vc_cons[i].d->vc_font.height = clin;
-				vc_cons[i].d->vc_resize_user = 1;
-				vc_resize(vc_cons[i].d, cc, ll);
+					vcp->vc_font.height = clin;
+				vcp->vc_resize_user = 1;
+				vc_resize(vcp, cc, ll);
 			}
 			console_unlock();
 		}
