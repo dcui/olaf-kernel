@@ -1356,7 +1356,8 @@ int dfs_cache_get_tgt_share(char *path, const struct dfs_cache_tgt_iterator *it,
 			    char **share, char **prefix)
 {
 	char sep;
-	char *target_share, *ppath;
+	char *target_share;
+	char *ppath = NULL;
 	const char *target_ppath, *dfsref_ppath;
 	size_t target_pplen, dfsref_pplen;
 	size_t len, c;
