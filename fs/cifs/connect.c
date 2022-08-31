@@ -5560,12 +5560,19 @@ int cifs_tree_connect(const unsigned int xid, struct cifs_tcon *tcon, const stru
 	rc = dfs_cache_noreq_find(tcon->dfs_path + 1, &ref, &tl);
 	if (rc)
 		goto out;
+
+	it = dfs_cache_get_tgt_iterator(&tl);
+	if (!it) {
+		rc = -ENOENT;
+		goto out;
+	}
+
 	isroot = ref.server_type == DFS_TYPE_ROOT;
 	free_dfs_info_param(&ref);
 
 	extract_unc_hostname(server->hostname, &tcp_host, &tcp_host_len);
 
-	for (it = dfs_cache_get_tgt_iterator(&tl); it; it = dfs_cache_get_next_tgt(&tl, it)) {
+	for (; it; it = dfs_cache_get_next_tgt(&tl, it)) {
 		bool target_match;
 
 		kfree(share);
@@ -5595,6 +5602,7 @@ int cifs_tree_connect(const unsigned int xid, struct cifs_tcon *tcon, const stru
 
 			if (!target_match) {
 				cifs_dbg(FYI, "%s: skipping target\n", __func__);
+				rc = -EHOSTUNREACH;
 				continue;
 			}
 		}
@@ -5606,24 +5614,19 @@ int cifs_tree_connect(const unsigned int xid, struct cifs_tcon *tcon, const stru
 			scnprintf(tree, MAX_TREE_SIZE, "\\%s", share);
 			rc = ops->tree_connect(xid, tcon->ses, tree, tcon, nlsc);
 			/* Only handle prefix paths of DFS link targets */
-			if (!rc && !isroot) {
+			if (!rc && !isroot)
 				rc = update_super_prepath(tcon, prefix);
-				break;
-			}
 		}
-		if (rc == -EREMOTE)
+		if (!rc || rc == -EREMOTE)
 			break;
 	}
 
 	kfree(share);
 	kfree(prefix);
 
-	if (!rc) {
-		if (it)
-			rc = dfs_cache_noreq_update_tgthint(tcon->dfs_path + 1, it);
-		else
-			rc = -ENOENT;
-	}
+	if (!rc)
+		rc = dfs_cache_noreq_update_tgthint(tcon->dfs_path + 1, it);
+
 	dfs_cache_free_tgts(&tl);
 out:
 	kfree(tree);
