@@ -2059,9 +2059,6 @@ static int validate_branch(struct objtool_file *file, struct symbol *func,
 			}
 			return 0;
 
-		case INSN_STACK:
-			break;
-
 		default:
 			break;
 		}
