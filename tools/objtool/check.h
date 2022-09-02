@@ -26,14 +26,7 @@
 #include <linux/hashtable.h>
 
 struct insn_state {
-	struct cfi_reg cfa;
-	struct cfi_reg regs[CFI_NUM_REGS];
-	int stack_size;
-	unsigned char type;
-	bool bp_scratch;
-	bool drap;
-	int drap_reg, drap_offset;
-	struct cfi_reg vals[CFI_NUM_REGS];
+	struct cfi_state cfi;
 };
 
 struct instruction {
@@ -52,7 +45,7 @@ struct instruction {
 	struct list_head alts;
 	struct symbol *func;
 	struct list_head stack_ops;
-	struct insn_state state;
+	struct cfi_state cfi;
 	struct orc_entry orc;
 };
 
