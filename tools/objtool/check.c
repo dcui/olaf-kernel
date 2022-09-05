@@ -700,6 +700,7 @@ static int handle_group_alt(struct objtool_file *file,
 		last_new_insn = insn;
 
 		insn->ignore = orig_insn->ignore_alts;
+		insn->func = orig_insn->func;
 
 		/*
 		 * Since alternative replacement code is copy/pasted by the
