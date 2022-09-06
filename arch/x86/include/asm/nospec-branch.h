@@ -40,12 +40,14 @@
 #define __FILL_RETURN_BUFFER(reg, nr, sp)	\
 	mov	$(nr/2), reg;			\
 771:						\
+	ANNOTATE_INTRA_FUNCTION_CALL		\
 	call	772f;				\
 773:	/* speculation trap */			\
 	pause;					\
 	lfence;					\
 	jmp	773b;				\
 772:						\
+	ANNOTATE_INTRA_FUNCTION_CALL		\
 	call	774f;				\
 775:	/* speculation trap */			\
 	pause;					\
@@ -141,6 +143,7 @@
 .endm
 
 .macro ISSUE_UNBALANCED_RET_GUARD
+	ANNOTATE_INTRA_FUNCTION_CALL
 	call .Lunbalanced_ret_guard_\@
 	int3
 .Lunbalanced_ret_guard_\@:
@@ -306,6 +309,10 @@ static inline void vmexit_fill_RSB(void)
 				   "jmp .Lunbalanced", X86_FEATURE_RSB_VMEXIT_LITE)
 				   __stringify(__FILL_RETURN_BUFFER(%0,RSB_CLEAR_LOOPS,%1))
 				   ".Lunbalanced:\n\t"
+				   "999: \n\t"
+				   ".pushsection .discard.intra_function_calls\n\t"
+				   ".long 999b\n\t"
+				   ".popsection\n\t"
 				   "call .Lunbalanced_ret_guard\n\t"
 				   "int3\n\t"
 				   ".Lunbalanced_ret_guard:\n\t"
