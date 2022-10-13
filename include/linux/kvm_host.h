@@ -405,6 +405,9 @@ struct kvm {
 	atomic_t online_vcpus;
 	int created_vcpus;
 	int last_boosted_vcpu;
+#ifndef __GENKSYMS__
+	bool vm_bugged;
+#endif
 	struct list_head vm_list;
 	struct mutex lock;
 	struct kvm_io_bus __rcu *buses[KVM_NR_BUSES];
@@ -449,7 +452,6 @@ struct kvm {
 	struct srcu_struct srcu;
 	struct srcu_struct irq_srcu;
 	pid_t userspace_pid;
-	bool vm_bugged;
 };
 
 #define kvm_err(fmt, ...) \
