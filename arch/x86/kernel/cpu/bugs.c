@@ -927,6 +927,7 @@ static void __init retbleed_select_mitigation(void)
 			pr_err("WARNING: CPU does not support IBPB.\n");
 			goto do_cmd_auto;
 		}
+		retbleed_mitigation = RETBLEED_MITIGATION_IBPB;
 		break;
 
 do_cmd_auto:
