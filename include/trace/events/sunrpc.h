@@ -535,10 +535,6 @@ DECLARE_EVENT_CLASS(svc_rqst_status,
 		__entry->status, show_rqstp_flags(__entry->flags))
 );
 
-DEFINE_EVENT(svc_rqst_status, svc_process,
-	TP_PROTO(struct svc_rqst *rqst, int status),
-	TP_ARGS(rqst, status));
-
 DEFINE_EVENT(svc_rqst_status, svc_send,
 	TP_PROTO(struct svc_rqst *rqst, int status),
 	TP_ARGS(rqst, status));

@@ -1452,14 +1452,10 @@ svc_process(struct svc_rqst *rqstp)
 	}
 
 	/* Returns 1 for send, 0 for drop */
-	if (likely(svc_process_common(rqstp, argv, resv))) {
-		int ret = svc_send(rqstp);
+	if (likely(svc_process_common(rqstp, argv, resv)))
+		return svc_send(rqstp);
 
-		trace_svc_process(rqstp, ret);
-		return ret;
-	}
 out_drop:
-	trace_svc_process(rqstp, 0);
 	svc_drop(rqstp);
 	return 0;
 }
