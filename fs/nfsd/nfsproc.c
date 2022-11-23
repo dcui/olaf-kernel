@@ -511,8 +511,11 @@ nfsd_proc_readdir(struct svc_rqst *rqstp, struct nfsd_readdirargs *argp,
 		SVCFH_fmt(&argp->fh),		
 		argp->count, argp->cookie);
 
+	count = argp->count;
+	if (count > PAGE_SIZE)
+		count = PAGE_SIZE;
 	/* Shrink to the client read size */
-	count = (argp->count >> 2) - 2;
+	count = (count >> 2) - 2;
 
 	/* Make sure we've room for the NULL ptr & eof flag */
 	count -= 2;
