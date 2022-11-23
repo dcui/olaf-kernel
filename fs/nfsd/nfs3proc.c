@@ -414,9 +414,17 @@ nfsd3_proc_readdir(struct svc_rqst *rqstp, struct nfsd3_readdirargs *argp,
 				SVCFH_fmt(&argp->fh),
 				argp->count, (u32) argp->cookie);
 
+	count = argp->count;
+	if (count > rqstp->rq_res.buflen)
+		count = rqstp->rq_res.buflen;
+	if (count > svc_max_payload(rqstp))
+		count = svc_max_payload(rqstp);
 	/* Make sure we've room for the NULL ptr & eof flag, and shrink to
 	 * client read size */
-	count = (argp->count >> 2) - 2;
+	count = count >> 2;
+	if (count < 2)
+		count = 2;
+	count -= 2;
 
 	/* Read directory and encode entries on the fly */
 	fh_copy(&resp->fh, &argp->fh);
@@ -455,7 +463,7 @@ nfsd3_proc_readdirplus(struct svc_rqst *rqstp, struct nfsd3_readdirargs *argp,
 					       struct nfsd3_readdirres  *resp)
 {
 	__be32	nfserr;
-	int	count = 0;
+	int	count;
 	loff_t	offset;
 	struct page **p;
 	caddr_t	page_addr = NULL;
@@ -464,9 +472,17 @@ nfsd3_proc_readdirplus(struct svc_rqst *rqstp, struct nfsd3_readdirargs *argp,
 				SVCFH_fmt(&argp->fh),
 				argp->count, (u32) argp->cookie);
 
+	count = argp->count;
+	if (count > rqstp->rq_res.buflen)
+		count = rqstp->rq_res.buflen;
+	if (count > svc_max_payload(rqstp))
+		count = svc_max_payload(rqstp);
 	/* Convert byte count to number of words (i.e. >> 2),
 	 * and reserve room for the NULL ptr & eof flag (-2 words) */
-	resp->count = (argp->count >> 2) - 2;
+	count = argp->count >> 2;
+	if (count < 2)
+		count = 2;
+	resp->count = count - 2;
 
 	/* Read directory and encode entries on the fly */
 	fh_copy(&resp->fh, &argp->fh);
@@ -489,6 +505,7 @@ nfsd3_proc_readdirplus(struct svc_rqst *rqstp, struct nfsd3_readdirargs *argp,
 				     &resp->common,
 				     nfs3svc_encode_entry_plus);
 	memcpy(resp->verf, argp->verf, 8);
+	count = 0;
 	for (p = rqstp->rq_respages + 1; p < rqstp->rq_next_page; p++) {
 		page_addr = page_address(*p);
 
