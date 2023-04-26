@@ -1205,12 +1205,6 @@ static void hv_compose_msi_msg(struct irq_data *data, struct msi_msg *msg)
 
 		local_irq_restore(flags);
 
-		if (hpdev->state == hv_pcichild_ejecting) {
-			dev_err_once(&hbus->hdev->device,
-				     "the device is being ejected\n");
-			goto free_int_desc;
-		}
-
 		udelay(100);
 	}
 
